@@ -1,4 +1,4 @@
-name: Faster configuration (constant-time GMP)
+name: Multithreading configuration
 
 on:
   push:
@@ -17,38 +17,23 @@ jobs:
       matrix:
         config:
           - {
+            name: "Windows Latest - MSVC",
+            artifact: "windows-msvc.tar.xz",
+            os: windows-latest,
+            cc: "cl",
+          }
+          - {
             name: "Windows Latest - MinGW",
             artifact: "windows-mingw.tar.xz",
             os: windows-latest,
             cc: "gcc"
           }
-          - {
-            name: "Ubuntu Latest - GCC",
-            artifact: "linux-gcc.tar.xz",
-            os: ubuntu-latest,
-            cc: "gcc",
-          }
-          - {
-            name: "Ubuntu Latest - Clang",
-            artifact: "linux-clang.tar.xz",
-            os: ubuntu-latest,
-            cc: "clang",
-          }
-          - {
-            name: "MacOS Latest",
-            os: macos-latest,
-            cc: "clang",
-          }
     steps:
       - uses: actions/checkout@v2
 
-      - name: Install Linux Dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt install libgmp-dev
-
-      - name: Install MacOS Dependencies
-        if: runner.os == 'MacOS'
-        run: brew install gmp
+      - name: Set Windows enviroment
+        if: ${{ (runner.os == 'Windows') && (matrix.config.cc == 'cl') }}
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Set MinGW enviroment
         if: ${{ (runner.os == 'Windows') && (matrix.config.cc == 'gcc') }}
@@ -60,8 +45,20 @@ jobs:
             base-devel
             gcc
             cmake
-            gmp
           update: true
+
+      - name: Set MacOS enviroment
+        if: ${{ (runner.os == 'MacOS') && (matrix.config.cc == 'clang') }}
+        shell: bash
+        run: brew install libomp
+
+      - name: Run CMake (Win)
+        if: ${{ (runner.os == 'Windows') && (matrix.config.cc == 'cl') }}
+        shell: bash
+        run: |
+          mkdir build
+          cd build
+          cmake -DSEED= -DBENCH=0 -DCORES=2 -DMULTI=OPENMP -G "NMake Makefiles" ..
 
       - name: Run CMake (MingW)
         if: ${{ (runner.os == 'Windows') && (matrix.config.cc == 'gcc') }}
@@ -69,7 +66,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -DSEED= -DBENCH=0 -DARITH=gmp-sec -G "MinGW Makefiles" ..
+          cmake -DSEED= -DBENCH=0 -DCORES=2 -DMULTI=OPENMP -G "MinGW Makefiles" ..
 
       - name: Run CMake (standard)
         if: ${{ !(runner.os == 'Windows') }}
@@ -77,7 +74,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -DCMAKE_C_COMPILER=${{ matrix.config.cc }} -DSEED= -DBENCH=0 -DARITH=gmp-sec ..
+          cmake -DCMAKE_C_COMPILER=${{ matrix.config.cc }} -DSEED= -DBENCH=0 -DCORES=2 -DMULTI=OPENMP ..
 
       - name: CMake Build
         run: cmake --build build
@@ -86,3 +83,9 @@ jobs:
         run: |
           cd build
           ctest --verbose .
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ runner.os }}-${{ matrix.config.cc }}
+          path: ./build
