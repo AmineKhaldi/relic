@@ -32,6 +32,7 @@
 
 #include <gmp.h>
 
+#include "relic_alloc.h"
 #include "relic_bn.h"
 #include "relic_bn_low.h"
 #include "relic_util.h"
@@ -49,7 +50,8 @@ dig_t bn_mul1_low(dig_t *c, const dig_t *a, dig_t digit, int size) {
 }
 
 dig_t bn_muls_low(dig_t *c, const dig_t *a, dig_t sa, dis_t digit, int size) {
-	dig_t _a[size], carry, sign, sd = digit >> (RLC_DIG - 1);
+	dig_t carry, sign, sd = digit >> (RLC_DIG - 1);
+	dig_t* _a = RLC_ALLOCA(dig_t, size);
 
 	sa = -sa;
 	sign = sa ^ sd;
@@ -63,6 +65,7 @@ dig_t bn_muls_low(dig_t *c, const dig_t *a, dig_t sa, dis_t digit, int size) {
 	for (size_t i = 0; i < size; i++) {
 		c[i] = c[i] ^ sign;
 	}
+	RLC_FREE(_a);
 	return (carry ^ sign) + mpn_add_1(c, c, size, -sign);
 }
 
